@@ -1,4 +1,4 @@
-import requests, dns.resolver as resolver 
+import requests, dns.resolver as resolver, whois
 '''
 git add .
 git commit  -m "comment"
@@ -47,7 +47,6 @@ def dns_lookup(host):
             mx_list.append("No MX Records found.")
         print(e)
 
-
 #Returns NS Records
     try:
         ns_servers = resolver.resolve(host, rdtype='NS')
@@ -72,7 +71,39 @@ def dns_lookup(host):
     return record_enumeration
 
 
+#Searches for registrant/owner info
+def whois_lookup(host):
+    try:
 
+        results = whois.whois(host)
+        registrar = results['registrar']
+        name_servers = results['name_servers']
+        emails = results['emails']
+        name = results['name']
+        org = results['org']
+        address = results['address']
+        country = results['country']
 
+        data = {
+
+            "registrar": registrar,
+            "name_servers": name_servers,
+            "emails": emails,
+            "name": name,
+            "org": org,
+            "address": address,
+            "country": country
+        }
+        for key in data:
+            if data[key] == None:
+                data[key] = "No data found."
+
+        return data
+    
+    except Exception as e:
+        print(e)
+        print("Failed to fetch info...")
+
+print(whois_lookup("cchs.ccusd.org"))
 
 
