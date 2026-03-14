@@ -104,6 +104,5 @@ def whois_lookup(host):
         print(e)
         print("Failed to fetch info...")
 
-print(whois_lookup("cchs.ccusd.org"))
 
 
