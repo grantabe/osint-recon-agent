@@ -2,6 +2,8 @@ import requests
 import dns.resolver as resolver, whois
 import dotenv, os
 from shodan import Shodan
+import json
+from datetime import datetime
 
 
 '''
@@ -176,4 +178,35 @@ def shodan_ip_recon(domain):
         print(e)
         print('Failed to fetch info...')
 
+
+def certificate_enum(host):
+    url = f'https://crt.sh/?q={host}&output=json'
+    cert_list = []
+    
+    try:
+        response = requests.get(url)
+        data = json.loads(response.text)
+        for object in data:
+            name_value = object['name_value']
+            issuer_name  = object['issuer_name']
+            common_name = object['common_name']
+            expir_date_obj = datetime.strptime(object['not_after'], '%Y-%m-%dT%H:%M:%S')
+            previous_year = datetime.now().year - 1
+            if expir_date_obj.year >= previous_year:
+                expir_date = object['not_after']
+
+            cert = {
+                'name_value': name_value,
+                'issuer_name': issuer_name,
+                'common_name': common_name,
+                'expir_date': expir_date
+            }
+            cert_list.append(cert)
+        print(cert_list)
+
+
+    except:
+        print("Connection Error")
+
+certificate_enum('cchs.ccusd.org')
 
