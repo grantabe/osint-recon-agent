@@ -15,7 +15,7 @@ dnspython → DNS records (A, MX, NS, TXT, subdomains)
 crt.sh API → certificate transparency logs
 '''
 
-#Initializing Variables
+#Initializing Environment Variables
 dotenv.load_dotenv()
 SHODAN_API_KEY = os.getenv("SHODAN_API_KEY")
 
@@ -119,8 +119,9 @@ def shodan_ip_recon(domain):
     
     api = Shodan(SHODAN_API_KEY)
     ip_list = []
-    info_list = []
+    data = []
 
+#Pulls DNS A records
     try:
         ip_address = resolver.resolve(domain, rdtype='A')
         for ip in ip_address:
@@ -131,50 +132,48 @@ def shodan_ip_recon(domain):
             ip_list.append("No A Records found.")
         print(e)
 
+#Makes the Shodan API calls to enumerate the host
     try:
         for ip in ip_list:
             host = api.host(ip)
-            port_list = []
-            transport_list = []
-            
- 
-            cipher_list = []
-            exipires_list = []
-
-            vulns_list = []
-
-            
+            host_list = []
 
             for entry in host['data']:
-                port = entry.get('port')
-                if port != None:
-                    port_list.append(port)
+                port = entry.get('port', 'N/A')
+                transport = entry.get('transport', 'N/A')
+                cipher = entry.get('ssl', {}).get('cipher', 'N/A')
+                expire_date = entry.get('ssl', {}).get('cert', {}).get('expires', 'N/A')
+                vulns =  entry.get('opts', {}).get('vulns', 'N/A')
+               
+                host_info = {
+                    'port': port,
+                    'transport': transport,
+                    'cipher': cipher,
+                    'cert_expires': expire_date,
+                    'vulns': vulns
+                }
+                host_list.append(host_info)
                 
-                transport = entry.get('transport')
-                if transport != None:
-                    transport_list.append(transport)
-
-                cipher = entry.get('ssl', {}).get('cipher')
-                if cipher !=  None:
-                    cipher_list.append(cipher)
-                expire_date = entry.get('ssl', {}).get('cert', {}).get('expires')
-                if expire_date != None:
-                    exipires_list.append(expire_date)
-
-                vulns =  entry.get('opts', {}).get('vulns')
-                if vulns != None:
-                    vulns_list.append(vulns)
-                
-
             asn = host.get('asn')
             org = host.get('org')
             isp = host.get('isp')
-            hostnames = host.get('hostnames')
-            os = host.get('os', 'n/a')
+            hostnames = host.get('hostnames', 'N/A')
+            os = host.get('os', 'N/A')
 
-            print(ip, port_list, transport_list, asn, org, isp, hostnames, os, exipires_list, cipher_list, vulns_list)
+            info = {
+                'ip_address': ip,
+                'asn': asn,
+                'org': org,
+                'isp': isp,
+                'hostnames': hostnames,
+                'os': os,
+                'services': host_list
+            }
+            data.append(info)
+
+        print(data)
     except Exception as e:
         print(e)
+        print('Failed to fetch info...')
 
 
-shodan_ip_recon("cchs.ccusd.org")
