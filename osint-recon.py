@@ -173,12 +173,13 @@ def shodan_ip_recon(domain):
             }
             data.append(info)
 
-        print(data)
+        return data
     except Exception as e:
         print(e)
         print('Failed to fetch info...')
 
 
+#Pull certificate enumeration
 def certificate_enum(host):
     url = f'https://crt.sh/?q={host}&output=json'
     cert_list = []
@@ -202,7 +203,7 @@ def certificate_enum(host):
                 'expir_date': expir_date
             }
             cert_list.append(cert)
-        print(cert_list)
+        return cert_list
 
 
     except:
