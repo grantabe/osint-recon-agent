@@ -209,5 +209,4 @@ def certificate_enum(host):
     except:
         print("Connection Error")
 
-certificate_enum('cchs.ccusd.org')
 
