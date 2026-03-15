@@ -1,4 +1,9 @@
-import requests, dns.resolver as resolver, whois
+import requests
+import dns.resolver as resolver, whois
+import dotenv, os
+from shodan import Shodan
+
+
 '''
 git add .
 git commit  -m "comment"
@@ -9,6 +14,10 @@ python-whois → registrant/owner info
 dnspython → DNS records (A, MX, NS, TXT, subdomains)
 crt.sh API → certificate transparency logs
 '''
+
+#Initializing Variables
+dotenv.load_dotenv()
+SHODAN_API_KEY = os.getenv("SHODAN_API_KEY")
 
 
 def dns_lookup(host):
@@ -106,3 +115,66 @@ def whois_lookup(host):
 
 
 
+def shodan_ip_recon(domain):
+    
+    api = Shodan(SHODAN_API_KEY)
+    ip_list = []
+    info_list = []
+
+    try:
+        ip_address = resolver.resolve(domain, rdtype='A')
+        for ip in ip_address:
+            ip_list.append(str(ip))
+
+    except Exception as e:
+        if not ip_list:
+            ip_list.append("No A Records found.")
+        print(e)
+
+    try:
+        for ip in ip_list:
+            host = api.host(ip)
+            port_list = []
+            transport_list = []
+            
+ 
+            cipher_list = []
+            exipires_list = []
+
+            vulns_list = []
+
+            
+
+            for entry in host['data']:
+                port = entry.get('port')
+                if port != None:
+                    port_list.append(port)
+                
+                transport = entry.get('transport')
+                if transport != None:
+                    transport_list.append(transport)
+
+                cipher = entry.get('ssl', {}).get('cipher')
+                if cipher !=  None:
+                    cipher_list.append(cipher)
+                expire_date = entry.get('ssl', {}).get('cert', {}).get('expires')
+                if expire_date != None:
+                    exipires_list.append(expire_date)
+
+                vulns =  entry.get('opts', {}).get('vulns')
+                if vulns != None:
+                    vulns_list.append(vulns)
+                
+
+            asn = host.get('asn')
+            org = host.get('org')
+            isp = host.get('isp')
+            hostnames = host.get('hostnames')
+            os = host.get('os', 'n/a')
+
+            print(ip, port_list, transport_list, asn, org, isp, hostnames, os, exipires_list, cipher_list, vulns_list)
+    except Exception as e:
+        print(e)
+
+
+shodan_ip_recon("cchs.ccusd.org")
