@@ -4,6 +4,8 @@ import dotenv, os
 from shodan import Shodan
 import json
 from datetime import datetime
+from anthropic import Anthropic
+from tools import tools
 
 
 '''
@@ -20,9 +22,10 @@ crt.sh API → certificate transparency logs
 #Initializing Environment Variables
 dotenv.load_dotenv()
 SHODAN_API_KEY = os.getenv("SHODAN_API_KEY")
+CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
 
 
-def dns_lookup(host):
+def dns_lookup(domain):
 
     ip_list =[]
     mx_list =[]
@@ -38,7 +41,7 @@ def dns_lookup(host):
 
 #Returns A Records
     try:
-        ip_address = resolver.resolve(host, rdtype='A')
+        ip_address = resolver.resolve(domain, rdtype='A')
         for ip in ip_address:
             ip_list.append(str(ip))
 
@@ -49,7 +52,7 @@ def dns_lookup(host):
 
 #Returns MX Records
     try:
-        mx_server = resolver.resolve(host, rdtype='MX')
+        mx_server = resolver.resolve(domain, rdtype='MX')
         for mx in mx_server:
             mx_list.append(str(mx))
    
@@ -60,7 +63,7 @@ def dns_lookup(host):
 
 #Returns NS Records
     try:
-        ns_servers = resolver.resolve(host, rdtype='NS')
+        ns_servers = resolver.resolve(domain, rdtype='NS')
         for ns in ns_servers:
             ns_list.append(str(ns))
    
@@ -71,7 +74,7 @@ def dns_lookup(host):
 
 #Returns TXT Records
     try:
-        txt_records = resolver.resolve(host, rdtype='TXT')
+        txt_records = resolver.resolve(domain, rdtype='TXT')
         for txt in txt_records:
             txt_list.append(str(txt))
 
@@ -79,14 +82,14 @@ def dns_lookup(host):
         if not txt_list:
             txt_list.append("No TXT Records found.")
         print(e)
-    return record_enumeration
+    return json.dumps(record_enumeration)
 
 
 #Searches for registrant/owner info
-def whois_lookup(host):
+def whois_lookup(domain):
     try:
 
-        results = whois.whois(host)
+        results = whois.whois(domain)
         registrar = results['registrar']
         name_servers = results['name_servers']
         emails = results['emails']
@@ -109,7 +112,7 @@ def whois_lookup(host):
             if data[key] == None:
                 data[key] = "No data found."
 
-        return data
+        return json.dumps(data)
     
     except Exception as e:
         print(e)
@@ -173,15 +176,15 @@ def shodan_ip_recon(domain):
             }
             data.append(info)
 
-        return data
+        return json.dumps(data)
     except Exception as e:
         print(e)
         print('Failed to fetch info...')
 
 
 #Pull certificate enumeration
-def certificate_enum(host):
-    url = f'https://crt.sh/?q={host}&output=json'
+def certificate_enum(domain):
+    url = f'https://crt.sh/?q={domain}&output=json'
     cert_list = []
     
     try:
@@ -203,10 +206,86 @@ def certificate_enum(host):
                 'expir_date': expir_date
             }
             cert_list.append(cert)
-        return cert_list
+        return json.dumps(cert_list)
 
 
     except:
         print("Connection Error")
 
 
+
+tool_functions = {
+    "dns_lookup": dns_lookup,
+    "whois_lookup": whois_lookup,
+    "shodan_ip_recon": shodan_ip_recon,
+    "certificate_enum": certificate_enum
+}
+
+
+def call_client(domain):
+   
+
+    client = Anthropic(api_key=CLAUDE_API_KEY)
+
+    response = client.messages.create(
+        max_tokens=1024,
+        system="You are an expert OSINT reconnaissance analyst. Given a target domain, your job is to gather as much intelligence as possible using your available tools. Run each tool against the target domain, analyze the results, and produce a structured recon report. The report should include: DNS infrastructure, registrant/owner information, open ports and services, SSL/TLS details, and any discovered subdomains. Highlight any security findings such as expiring certificates, weak ciphers, known vulnerabilities, or exposed services. Prioritize findings by severity.",
+        tools=tools,
+        messages=[ 
+            {
+            "role":"user",
+            "content": f"Perform a full recon scan on {domain}"
+            },
+        ],
+        model="claude-opus-4-6"
+    )
+
+    tools_results = []
+
+    for data in response.content:
+        if data.type == "tool_use":
+            result = tool_functions[data.name](data.input['domain'])
+            tools_results.append({
+                "type": "tool_result",
+                "tool_use_id": data.id,
+                "content": result
+            })
+
+
+    follow_up = client.messages.create(
+        model="claude-opus-4-6",
+        max_tokens=4096,
+        system="You are an expert OSINT reconnaissance analyst. Given a target domain, your job is to gather as much intelligence as possible using your available tools. Run each tool against the target domain, analyze the results, and produce a structured recon report. The report should include: DNS infrastructure, registrant/owner information, open ports and services, SSL/TLS details, and any discovered subdomains. Highlight any security findings such as expiring certificates, weak ciphers, known vulnerabilities, or exposed services. Prioritize findings by severity.",
+        tools=tools,
+        messages=[
+            {
+                "role":"user",
+                "content": f"Perform a full recon scan on {domain}"
+            },
+            {
+                "role":"assistant",
+                "content": response.content
+            },
+            {
+                "role":"user",
+                "content": tools_results
+            }
+        ]
+    )
+
+    return follow_up.content
+
+
+
+def main():
+    domain = input("Domain: ")
+    if "." not in domain or " " in domain or not domain:
+        print("Invalid domain, try again.")
+  
+    else:
+        report = call_client(domain)
+        print(report)
+
+
+main()
+    

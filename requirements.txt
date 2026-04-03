@@ -1,0 +1,6 @@
+dnspython
+python-whois
+shodan
+requests
+python-dotenv
+anthropic
