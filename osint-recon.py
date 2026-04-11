@@ -1,7 +1,7 @@
 import requests
 import dns.resolver as resolver, whois
 import dotenv, os
-from shodan import Shodan
+from shodan import Shodan, APIError
 import json
 from datetime import datetime
 from anthropic import Anthropic
@@ -131,15 +131,16 @@ def shodan_ip_recon(domain):
         ip_address = resolver.resolve(domain, rdtype='A')
         for ip in ip_address:
             ip_list.append(str(ip))
-
-    except Exception as e:
-        if not ip_list:
-            ip_list.append("No A Records found.")
+    except (resolver.NoAnswer, resolver.NXDOMAIN, resolver.NoNameservers, resolver.Timeout) as e:
         print(e)
+    
+    if not ip_list:
+        return json.dumps({"error": "No A records found for domain"})
 
 #Makes the Shodan API calls to enumerate the host
-    try:
-        for ip in ip_list:
+
+    for ip in ip_list:
+        try:
             host = api.host(ip)
             host_list = []
 
@@ -149,7 +150,7 @@ def shodan_ip_recon(domain):
                 cipher = entry.get('ssl', {}).get('cipher', 'N/A')
                 expire_date = entry.get('ssl', {}).get('cert', {}).get('expires', 'N/A')
                 vulns =  entry.get('opts', {}).get('vulns', 'N/A')
-               
+            
                 host_info = {
                     'port': port,
                     'transport': transport,
@@ -175,11 +176,9 @@ def shodan_ip_recon(domain):
                 'services': host_list
             }
             data.append(info)
-
-        return json.dumps(data)
-    except Exception as e:
-        print(e)
-        print('Failed to fetch info...')
+        except APIError as e:
+            print(f"Error for {ip}:{e}")
+    return json.dumps(data)
 
 
 #Pull certificate enumeration
@@ -209,8 +208,8 @@ def certificate_enum(domain):
         return json.dumps(cert_list)
 
 
-    except:
-        print("Connection Error")
+    except Exception as e:
+        print(f"Connection Error: {e}")
 
 
 
