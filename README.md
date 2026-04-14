@@ -9,8 +9,8 @@ The tool uses Claude's tool-use API to orchestrate four recon modules. Given a t
 ```
 User provides domain
         ↓
-   AI Agent decides
-   which tools to run
+   AI Agent runs
+   these tools 
         ↓
   ┌─────┼─────┬──────────┐
   ↓     ↓     ↓          ↓
