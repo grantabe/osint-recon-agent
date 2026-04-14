@@ -18,10 +18,6 @@ DOMAIN_RE = re.compile(r'^(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[
 
 
 '''
-git add .
-git commit  -m "comment"
-git push
-
 Shodan API → open ports and services
 python-whois → registrant/owner info
 dnspython → DNS records (A, MX, NS, TXT, subdomains)
