@@ -4,3 +4,5 @@ shodan
 requests
 python-dotenv
 anthropic
+rich
+markdown

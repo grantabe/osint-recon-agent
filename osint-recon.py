@@ -1,11 +1,20 @@
 import requests
 import dns.resolver as resolver, whois
-import dotenv, os
+import dotenv, os, argparse, re, time
 from shodan import Shodan, APIError
 import json
 from datetime import datetime
 from anthropic import Anthropic
 from tools import tools
+import markdown as md_lib
+from rich.console import Console
+from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.markdown import Markdown
+from rich.panel import Panel
+
+console = Console()
+
+DOMAIN_RE = re.compile(r'^(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$')
 
 
 '''
@@ -45,7 +54,7 @@ def dns_lookup(domain):
         for ip in ip_address:
             ip_list.append(str(ip))
 
-    except Exception as e:
+    except (resolver.NXDOMAIN, resolver.NoNameservers, resolver.NoAnswer, resolver.Timeout) as e:
         if not ip_list:
             ip_list.append("No A Records found.")
         print(e)
@@ -56,7 +65,7 @@ def dns_lookup(domain):
         for mx in mx_server:
             mx_list.append(str(mx))
    
-    except Exception as e:
+    except (resolver.NXDOMAIN, resolver.NoNameservers, resolver.NoAnswer, resolver.Timeout) as e:
         if not mx_list:
             mx_list.append("No MX Records found.")
         print(e)
@@ -67,7 +76,7 @@ def dns_lookup(domain):
         for ns in ns_servers:
             ns_list.append(str(ns))
    
-    except Exception as e:
+    except (resolver.NXDOMAIN, resolver.NoNameservers, resolver.NoAnswer, resolver.Timeout) as e:
         if not ns_list:
             ns_list.append("No NS Records found.")
         print(e)
@@ -90,13 +99,13 @@ def whois_lookup(domain):
     try:
 
         results = whois.whois(domain)
-        registrar = results['registrar']
-        name_servers = results['name_servers']
-        emails = results['emails']
-        name = results['name']
-        org = results['org']
-        address = results['address']
-        country = results['country']
+        registrar = results.get('registrar')
+        name_servers = results.get('name_servers')
+        emails = results.get('emails')
+        name = results.get('name')
+        org = results.get('org')
+        address = results.get('address')
+        country = results.get('country')
 
         data = {
 
@@ -114,9 +123,9 @@ def whois_lookup(domain):
 
         return json.dumps(data)
     
-    except Exception as e:
+    except (TimeoutError, ConnectionError, whois.parser.WhoisDomainNotFoundError) as e:
         print(e)
-        print("Failed to fetch info...")
+        return json.dumps({"error": "WHOIS lookup failed: " + str(e)})
 
 
 
@@ -139,7 +148,9 @@ def shodan_ip_recon(domain):
 
 #Makes the Shodan API calls to enumerate the host
 
-    for ip in ip_list:
+    for i, ip in enumerate(ip_list):
+        if i > 0:
+            time.sleep(1)
         try:
             host = api.host(ip)
             host_list = []
@@ -187,7 +198,8 @@ def certificate_enum(domain):
     cert_list = []
     
     try:
-        response = requests.get(url)
+        time.sleep(0.5)
+        response = requests.get(url, timeout=15)
         data = json.loads(response.text)
         for object in data:
             name_value = object['name_value']
@@ -197,6 +209,8 @@ def certificate_enum(domain):
             previous_year = datetime.now().year - 1
             if expir_date_obj.year >= previous_year:
                 expir_date = object['not_after']
+            else:
+                continue
 
             cert = {
                 'name_value': name_value,
@@ -208,8 +222,10 @@ def certificate_enum(domain):
         return json.dumps(cert_list)
 
 
-    except Exception as e:
+    except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
         print(f"Connection Error: {e}")
+        return json.dumps({"error": str(e)})
+
 
 
 
@@ -241,15 +257,18 @@ def call_client(domain):
 
     tools_results = []
 
-    for data in response.content:
-        if data.type == "tool_use":
-            result = tool_functions[data.name](data.input['domain'])
-            tools_results.append({
-                "type": "tool_result",
-                "tool_use_id": data.id,
-                "content": result
-            })
-
+    with Progress(SpinnerColumn(), TextColumn("{task.description}"), console=console) as progress:
+        task = progress.add_task("Initializing recon tools...", total=None)
+        for data in response.content:
+            if data.type == "tool_use":
+                progress.update(task, description=f"Running [bold]{data.name}[/bold]...")
+                result = tool_functions[data.name](data.input['domain'])
+                tools_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": data.id,
+                    "content": result
+                })
+        progress.update(task, description="[green]Tools complete. Generating report...[/green]")
 
     follow_up = client.messages.create(
         model="claude-opus-4-6",
@@ -272,18 +291,78 @@ def call_client(domain):
         ]
     )
 
-    return follow_up.content
+    return "\n".join(block.text for block in follow_up.content if hasattr(block, "text"))
 
+
+
+def save_report(domain, content, output_dir="reports"):
+    os.makedirs(output_dir, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    header = f"# OSINT Report: {domain}\n_Generated: {datetime.now().isoformat()}_\n\n"
+    full_content = header + content
+
+    md_path = os.path.join(output_dir, f"{domain}_{timestamp}.md")
+    with open(md_path, "w", encoding="utf-8") as f:
+        f.write(full_content)
+
+    html_body = md_lib.markdown(full_content, extensions=["fenced_code", "tables"])
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OSINT Report: {domain}</title>
+    <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 900px; margin: 40px auto; padding: 0 24px; color: #1a1a1a; line-height: 1.6; }}
+        h1 {{ color: #1a3a5c; border-bottom: 2px solid #1a3a5c; padding-bottom: 8px; }}
+        h2 {{ color: #2c5f8a; margin-top: 2em; }}
+        h3 {{ color: #3a7ab5; }}
+        code {{ background: #f0f4f8; padding: 2px 6px; border-radius: 4px; font-size: 0.88em; }}
+        pre {{ background: #f0f4f8; padding: 16px; border-radius: 6px; overflow-x: auto; }}
+        pre code {{ background: none; padding: 0; }}
+        table {{ border-collapse: collapse; width: 100%; margin: 1em 0; }}
+        th, td {{ border: 1px solid #d0d7de; padding: 8px 12px; text-align: left; }}
+        th {{ background: #f0f4f8; font-weight: 600; }}
+        em {{ color: #555; }}
+        strong {{ color: #111; }}
+    </style>
+</head>
+<body>
+{html_body}
+</body>
+</html>"""
+
+    html_path = os.path.join(output_dir, f"{domain}_{timestamp}.html")
+    with open(html_path, "w", encoding="utf-8") as f:
+        f.write(html)
+
+    return md_path, html_path
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="OSINT Reconnaissance Agent")
+    parser.add_argument("-d", "--domain", metavar="DOMAIN", help="Target domain")
+    parser.add_argument("--no-save", action="store_true", help="Print report only, don't save to file")
+    parser.add_argument("-o", "--output", default="reports", metavar="DIR", help="Output directory (default: reports/)")
+    return parser.parse_args()
 
 
 def main():
-    domain = input("Domain: ")
-    if "." not in domain or " " in domain or not domain:
-        print("Invalid domain, try again.")
-  
-    else:
-        report = call_client(domain)
-        print(report)
+    args = parse_args()
+    domain = args.domain or input("Domain: ").strip()
+
+    if not DOMAIN_RE.match(domain):
+        console.print("[red]Invalid domain, try again.[/red]")
+        return
+
+    console.rule(f"[bold blue]{domain}[/bold blue]")
+    report_text = call_client(domain)
+    console.print(Panel(Markdown(report_text), title=f"[bold]OSINT Report: {domain}[/bold]", border_style="blue"))
+
+    if not args.no_save:
+        md_path, html_path = save_report(domain, report_text, args.output)
+        console.print(f"[green]Report saved → {md_path}[/green]")
+        console.print(f"[green]Report saved → {html_path}[/green]")
 
 
 main()
