@@ -1,13 +1,39 @@
 # OSINT Recon Agent
 
-A passive reconnaissance tool built in Python that gathers open-source intelligence on target domains. Designed for authorized security assessments and PJPT/PNPT exam preparation.
+An AI-powered passive reconnaissance tool that autonomously gathers open-source intelligence on target domains. Built with Python and the Anthropic API, the agent decides which recon tools to run, executes them, analyzes the results, and produces a prioritized security report — all without manual intervention.
+
+## How It Works
+
+The tool uses Claude's tool-use API to orchestrate four recon modules. Given a target domain, the AI agent autonomously determines which tools to call, processes the results, and generates a structured report highlighting security findings ranked by severity.
+
+```
+User provides domain
+        ↓
+   AI Agent decides
+   which tools to run
+        ↓
+  ┌─────┼─────┬──────────┐
+  ↓     ↓     ↓          ↓
+ DNS  WHOIS  Shodan   crt.sh
+  ↓     ↓     ↓          ↓
+  └─────┼─────┴──────────┘
+        ↓
+  Agent analyzes results
+        ↓
+  Generates prioritized
+  security report (HTML/MD)
+```
 
 ## Features
 
-- **DNS Enumeration** — Queries A, MX, NS, and TXT records to map out a target's DNS infrastructure
-- **WHOIS Lookup** — Retrieves registrant details, name servers, contact emails, and organizational info
-- **Shodan Integration** — Pulls open ports, running services, and banners without active scanning (coming soon)
-- **Certificate Transparency** — Queries crt.sh for issued certificates, subdomains, and cert metadata (coming soon)
+- **DNS Enumeration** — Queries A, MX, NS, and TXT records to map DNS infrastructure, mail servers, and SPF/DKIM configurations
+- **WHOIS Lookup** — Retrieves registrant details, registrar, name servers, contact emails, and organizational info
+- **Shodan Integration** — Resolves domain to IPs and pulls open ports, services, TLS/SSL cipher details, certificate expiration, WAF detection, and known vulnerabilities — all without active scanning
+- **Certificate Transparency** — Queries crt.sh for issued certificates, discovering subdomains and tracking certificate issuers and expiration dates
+- **AI-Powered Analysis** — Claude analyzes all gathered data and produces a structured report with findings prioritized by severity and actionable remediation steps
+- **Structured Reports** — Generates output in HTML and Markdown formats
+- **Interactive CLI** — Argparse-based interface with domain validation and rich terminal output
+- **Error Handling** — Specific exception handling per module (Shodan APIError, DNS NXDOMAIN/Timeout, WHOIS domain not found, request timeouts) with graceful fallbacks
 
 ## Installation
 
@@ -15,25 +41,56 @@ A passive reconnaissance tool built in Python that gathers open-source intellige
 git clone https://github.com/grantabe/osint-recon-agent.git
 cd osint-recon-agent
 python3 -m venv venv
-source venv/bin/activate
+source venv/bin/activate        # macOS/Linux
+# venv\Scripts\Activate.ps1     # Windows PowerShell
 pip install -r requirements.txt
 ```
 
 ## Configuration
 
-Create a `.env` file in the project root for API keys:
+Create a `.env` file in the project root:
 
 ```
-SHODAN_API_KEY=your_key_here
+SHODAN_API_KEY=your_shodan_key
+ANTHROPIC_API_KEY=your_anthropic_key
 ```
 
-This file is excluded from version control via `.gitignore`.
+- **Shodan API key**: Free tier available at [shodan.io](https://shodan.io)
+- **Anthropic API key**: Available at [console.anthropic.com](https://console.anthropic.com)
 
 ## Usage
 
 ```bash
 python3 main.py <target-domain>
 ```
+
+Example:
+
+```bash
+python3 main.py example.com
+```
+
+## Sample Report Output
+
+The agent produces reports that include:
+
+- Executive summary of the target's infrastructure
+- DNS infrastructure mapping
+- Registrant and organizational details
+- Open ports and services with TLS/SSL analysis
+- Certificate transparency findings and subdomain discovery
+- Security findings prioritized by severity (Critical / High / Medium / Low)
+- Actionable remediation recommendations
+
+## Tech Stack
+
+- **Python 3**
+- **Anthropic API** — Claude tool-use for autonomous agent orchestration
+- **dnspython** — DNS record enumeration
+- **python-whois** — WHOIS lookups
+- **Shodan API** — Passive host intelligence
+- **Requests** — crt.sh certificate transparency queries
+- **python-dotenv** — Environment variable management
 
 ## Disclaimer
 
