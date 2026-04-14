@@ -233,6 +233,7 @@ tool_functions = {
 }
 
 
+#Calling agent and generating reports
 def call_client(domain):
    
 
@@ -290,7 +291,7 @@ def call_client(domain):
     return "\n".join(block.text for block in follow_up.content if hasattr(block, "text"))
 
 
-
+# Generate HTML and Markdown Report
 def save_report(domain, content, output_dir="reports"):
     os.makedirs(output_dir, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -334,7 +335,7 @@ def save_report(domain, content, output_dir="reports"):
 
     return md_path, html_path
 
-
+#Creating arguments
 def parse_args():
     parser = argparse.ArgumentParser(description="OSINT Reconnaissance Agent")
     parser.add_argument("-d", "--domain", metavar="DOMAIN", help="Target domain")

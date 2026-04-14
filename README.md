@@ -1,10 +1,10 @@
 # OSINT Recon Agent
 
-An AI-powered passive reconnaissance tool that autonomously gathers open-source intelligence on target domains. Built with Python and the Anthropic API, the agent decides which recon tools to run, executes them, analyzes the results, and produces a prioritized security report — all without manual intervention.
+An AI-powered passive reconnaissance tool that autonomously gathers open-source intelligence on target domains. Built with Python and the Anthropic API, the agent executes recon tools and analyzes the results, and produces a prioritized security report.
 
 ## How It Works
 
-The tool uses Claude's tool-use API to orchestrate four recon modules. Given a target domain, the AI agent autonomously determines which tools to call, processes the results, and generates a structured report highlighting security findings ranked by severity.
+The tool uses Claude's tool-use API to orchestrate four recon modules. Given a target domain, the AI agent processes the results, and generates a structured report highlighting security findings ranked by severity.
 
 ```
 User provides domain
@@ -28,12 +28,10 @@ User provides domain
 
 - **DNS Enumeration** — Queries A, MX, NS, and TXT records to map DNS infrastructure, mail servers, and SPF/DKIM configurations
 - **WHOIS Lookup** — Retrieves registrant details, registrar, name servers, contact emails, and organizational info
-- **Shodan Integration** — Resolves domain to IPs and pulls open ports, services, TLS/SSL cipher details, certificate expiration, WAF detection, and known vulnerabilities — all without active scanning
+- **Shodan Integration** — Resolves domain to IPs and pulls open ports, services, TLS/SSL cipher details, certificate expiration, WAF detection, and known vulnerabilities: This is all without active scanning
 - **Certificate Transparency** — Queries crt.sh for issued certificates, discovering subdomains and tracking certificate issuers and expiration dates
 - **AI-Powered Analysis** — Claude analyzes all gathered data and produces a structured report with findings prioritized by severity and actionable remediation steps
 - **Structured Reports** — Generates output in HTML and Markdown formats
-- **Interactive CLI** — Argparse-based interface with domain validation and rich terminal output
-- **Error Handling** — Specific exception handling per module (Shodan APIError, DNS NXDOMAIN/Timeout, WHOIS domain not found, request timeouts) with graceful fallbacks
 
 ## Installation
 
